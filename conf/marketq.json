@@ -1,0 +1,49 @@
+{
+  "conf": [
+    {
+      "company": "Eastmoney Futures",
+      "brokerID": "9099",
+      "flowPath": "./flow1/",
+      "usingUDP": false,
+      "isMulticast": false,
+      "userID": "user",
+      "password": "pwd",
+      "front": [
+        "180.166.13.41:51213",
+        "180.166.13.42:51213",
+        "180.166.13.43:51213",
+        "180.166.13.44:51213"
+      ]
+    },
+    {
+      "company": "Galaxy Futures",
+      "brokerID": "4040",
+      "flowPath": "./flow2/",
+      "usingUDP": false,
+      "isMulticast": false,
+      "userID": "user",
+      "password": "pwd",
+      "front": [
+        "180.166.103.21:55213",
+        "101.230.198.41:56213",
+        "180.166.103.21:57213",
+        "58.247.171.151:55213"
+      ]
+    },
+    {
+      "company": "China Futures",
+      "brokerID": "9080",
+      "flowPath": "./flow3/",
+      "usingUDP": false,
+      "isMulticast": false,
+      "userID": "user",
+      "password": "pwd",
+      "front": [
+        "61.186.254.135:42213",
+        "180.153.15.150:42213",
+        "180.153.15.146:42213",
+        "101.231.128.133:42213"
+      ]
+    }
+  ]
+}
