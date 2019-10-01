@@ -3,6 +3,8 @@
 
 #include "CFisherCommand_List.h"
 
+#include "CMyCTPMarketQHandler.h"
+
 CFisherCommand_List::CFisherCommand_List() {}
 
 CFisherCommand_List::~CFisherCommand_List() {}
@@ -12,7 +14,8 @@ bool CFisherCommand_List::checkIfCmdString(const char* cmdString) {
 }
 
 void CFisherCommand_List::execute(const char* optString) {
-  std::cout << "列出订阅的合约信息" << std::endl;
+  const char* instrumentID = optString;
+  CMyCTPMarketQHandler::List(instrumentID);
 }
 
 void CFisherCommand_List::print() {

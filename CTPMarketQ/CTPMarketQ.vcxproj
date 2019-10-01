@@ -161,6 +161,7 @@
     <ClInclude Include="CFisherCommand_SQR.h" />
     <ClInclude Include="CFisherCommand_Start.h" />
     <ClInclude Include="CFisherCommand_Stop.h" />
+    <ClInclude Include="CMyCTPMarketQHandler.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
@@ -171,6 +172,7 @@
     <ClCompile Include="CFisherCommand_SQR.cpp" />
     <ClCompile Include="CFisherCommand_Start.cpp" />
     <ClCompile Include="CFisherCommand_Stop.cpp" />
+    <ClCompile Include="CMyCTPMarketQHandler.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -178,6 +180,11 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FisherConsole\FisherConsole.vcxproj">
+      <Project>{252bd823-9007-4ce1-a6e8-5e71d921a511}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

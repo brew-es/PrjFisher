@@ -8,6 +8,8 @@
 #include "CFisherCommand_Show.h"
 #include "CFisherCommand_List.h"
 
+#include "CMyCTPMarketQHandler.h"
+
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
@@ -35,6 +37,8 @@ extern "C" void CTPMARKETQ_API FisherModuleInit() {
 }
 
 extern "C" void CTPMARKETQ_API FisherModuleDeinit() {
+  CMyCTPMarketQHandler::Stop();
+
   CFisherCommand::Instance()->Remove("list");
   CFisherCommand::Instance()->Remove("show");
   CFisherCommand::Instance()->Remove("sqr");

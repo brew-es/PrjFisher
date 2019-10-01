@@ -2,6 +2,7 @@
 //
 
 #include <iostream>
+#include "coutformat.h"
 
 #include "CFisherCommand.h"
 
@@ -12,18 +13,31 @@ int main() {
   atexit([]() {
     std::cout << "Fisher控制台已结束。" << std::endl;
     std::cout << "]" << std::endl;
+    std::cout << white;
   });
 
+  std::cout << green;
   std::cout << "开始运行Fisher控制台" << std::endl;
   SetConsoleCtrlHandler();
 
+  std::cout << yellow;
   CFisherCommand::Instance();
   std::cout << std::endl;
+
+  #ifdef _DEBUG
+  std::cout << "DEBUG [" << std::endl << std::endl;
+  CFisherCommand::Instance()->Execute("load", "ctpmarketq.dll");
+  std::cout << std::endl;
+  CFisherCommand::Instance()->Execute("start", "../conf/marketq.json");
+  std::cout << std::endl;
+  std::cout << "]" << std::endl;
+#endif  // _DEBUG
+
 
   while (true) {
     char cmdLine[512] = "";
 
-    std::cout << ":";
+    std::cout << cyan << ":";
     std::fgets(cmdLine, 512, stdin);
     std::fflush(stdin);
 
@@ -37,11 +51,9 @@ int main() {
     if (optString != nullptr) {
       *optString = '\0';
       optString++;
-    } else {
-      optString = (char*)"";
     }
 
-    std::cout << std::endl << "[" << std::endl;
+    std::cout << yellow << std::endl << "[" << std::endl;
     CFisherCommand::Instance()->Execute(cmdLine, optString);
     std::cout << "]" << std::endl;
     std::cout << std::endl;

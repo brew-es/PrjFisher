@@ -10,6 +10,12 @@
 // 添加要在此处预编译的标头
 #include "framework.h"
 
+#include "../CTP/ThostFtdcUserApiStruct.h"
+#include "../CTP/ThostFtdcUserApiDataType.h"
+#include "../CTP/ThostFtdcMdApi.h"
+
+#include "../JSONCPP/include/json/json.h"
+
 #include "../FisherConsole/CFisherCommand.h"
 
 #endif //PCH_H

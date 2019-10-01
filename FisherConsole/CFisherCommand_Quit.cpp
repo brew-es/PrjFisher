@@ -11,4 +11,4 @@ bool CFisherCommand_Quit::checkIfCmdString(const char* cmdString) {
 
 void CFisherCommand_Quit::execute(const char* optString) { exit(0); }
 
-void CFisherCommand_Quit::print() { std::cout << "quit [force, save <cache file>]" << std::endl; }
+void CFisherCommand_Quit::print() { std::cout << "quit [save <cache file>]" << std::endl; }

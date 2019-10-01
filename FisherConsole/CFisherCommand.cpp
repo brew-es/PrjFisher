@@ -57,8 +57,11 @@ void CFisherCommand::Execute(const char* cmdString, const char* optString) {
   } else if (_nextCmdPtr != nullptr) {
     _nextCmdPtr->Execute(cmdString, optString);
   } else {
-    std::cout << "无效命令（" << cmdString << " " << optString << "）"
-              << std::endl;
+    std::cout << "无效命令（" << cmdString;
+    if (optString != nullptr && strlen(optString) > 0) {
+      std::cout << " " << optString;
+    }
+    std::cout << "）" << std::endl;
   }
 }
 

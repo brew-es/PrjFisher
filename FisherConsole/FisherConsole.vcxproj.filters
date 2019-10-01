@@ -62,5 +62,8 @@
     <ClInclude Include="CFisherCommand_Unload.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="coutformat.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

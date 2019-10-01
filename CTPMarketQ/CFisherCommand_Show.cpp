@@ -3,9 +3,9 @@
 
 #include "CFisherCommand_Show.h"
 
-CFisherCommand_Show::CFisherCommand_Show() {}
+CFisherCommand_Show::CFisherCommand_Show(){}
 
-CFisherCommand_Show::~CFisherCommand_Show() {}
+CFisherCommand_Show::~CFisherCommand_Show(){}
 
 bool CFisherCommand_Show::checkIfCmdString(const char* cmdString) {
   return strcmp(cmdString, "show") == 0;

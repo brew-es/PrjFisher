@@ -168,6 +168,7 @@
     <ClInclude Include="CFisherCommand_Unload.h" />
     <ClInclude Include="CFisherCommand_Version.h" />
     <ClInclude Include="CFisherConsole.h" />
+    <ClInclude Include="coutformat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
