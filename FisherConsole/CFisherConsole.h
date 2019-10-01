@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #ifdef FISHER_EXPORT
 #define FISHER_API __declspec(dllexport)
 #else

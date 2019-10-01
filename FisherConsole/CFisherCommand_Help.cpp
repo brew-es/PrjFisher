@@ -15,6 +15,12 @@ void CFisherCommand_Help::execute(const char* optString) {
   if (cmdString == nullptr || strlen(cmdString) <= 0 ||
       this->checkIfCmdString(cmdString)) {
     this->print();
+  } else if (optString[0] == '*') {
+    CFisherCommand* cmdPtr = _nextCmdPtr;
+    while (cmdPtr != nullptr) {
+      cmdPtr->print();
+      cmdPtr = cmdPtr->_nextCmdPtr;
+    }
   } else {
     CFisherCommand* cmdPtr = _nextCmdPtr;
     while (cmdPtr != nullptr) {

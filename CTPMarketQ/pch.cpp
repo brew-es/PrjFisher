@@ -9,3 +9,7 @@
 #else
 #pragma comment(lib, "../x64/Release/FisherConsole.lib")
 #endif  // _DEBUG
+
+#pragma comment(lib, "../JSONCPP/lib/jsoncpp.lib")
+#pragma comment(lib, "../CTP/lib/thostmduserapi_se.lib")
+#pragma comment(lib, "../CTP/lib/thosttraderapi_se.lib")
