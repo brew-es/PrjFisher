@@ -4,19 +4,37 @@
 
 #include "CMyCTPMarketQHandler.h"
 
+#include <io.h>
+#include <direct.h>
+
+static bool MyCreateDirectory(std::string folder) {
+  std::string sub;
+  std::string folder_builder;
+
+  std::replace(folder.begin(), folder.end(), '\\', '/');
+  sub.reserve(folder.size());
+
+  for (auto it = folder.begin(); it != folder.end(); ++it) {
+    const char c = *it;
+    sub.push_back(c);
+    if (c == '/' || it == folder.end() - 1) {
+      folder_builder.append(sub);
+      if (0 != ::_access(folder_builder.c_str(), 0)) {
+        if (0 != ::_mkdir(folder_builder.c_str())) {
+          return false;
+        }
+      }
+      sub.clear();
+    }
+  }
+  return true;
+}
+
 enum {
   MD_RET_OK = -0,              // 代表成功
   MD_RET_CONNECT_FAILED = -1,  // 表示网络连接失败
   MD_RET_MAX_RESPONSE = -2,    // 表示未处理请求超过许可数
   MD_RET_MAX_REQUEST = -3,     // 表示每秒发送请求数超过许可数
-};
-
-enum {
-  MD_DISCONNECT_REASON_READ_FAILED = 0x1001,              // 网络读失败
-  MD_DISCONNECT_REASON_WRITE_FAILED = 0x1002,             // 网络写失败
-  MD_DISCONNECT_REASON_HEARTBEAT_READ_TIMEOUT = 0x2001,   // 接收心跳超时
-  MD_DISCONNECT_REASON_HEARTBEAT_WRITE_TIMEOUT = 0x2002,  // 发送心跳失败
-  MD_DISCONNECT_REASON_INVALID_PACKET = 0x2003,           // 收到错误报文
 };
 
 static const char* errString(int err) {
@@ -37,7 +55,35 @@ static const char* errString(int err) {
   }
 }
 
-static CMyCTPMarketQHandler* CTPMarketQHandlerArray[MAX_MARKETQ_HANDLER] = {
+enum {
+  MD_DISCONNECT_REASON_READ_FAILED = 0x1001,              // 网络读失败
+  MD_DISCONNECT_REASON_WRITE_FAILED = 0x1002,             // 网络写失败
+  MD_DISCONNECT_REASON_HEARTBEAT_READ_TIMEOUT = 0x2001,   // 接收心跳超时
+  MD_DISCONNECT_REASON_HEARTBEAT_WRITE_TIMEOUT = 0x2002,  // 发送心跳失败
+  MD_DISCONNECT_REASON_INVALID_PACKET = 0x2003,           // 收到错误报文
+};
+
+static const char* reasonString(int reason) {
+  static char unknown[128] = "";
+
+  switch (reason) {
+    case MD_DISCONNECT_REASON_READ_FAILED:
+      return "网络读失败";
+    case MD_DISCONNECT_REASON_WRITE_FAILED:
+      return "网络写失败";
+    case MD_DISCONNECT_REASON_HEARTBEAT_READ_TIMEOUT:
+      return "接收心跳超时";
+    case MD_DISCONNECT_REASON_HEARTBEAT_WRITE_TIMEOUT:
+      return "发送心跳失败";
+    case MD_DISCONNECT_REASON_INVALID_PACKET:
+      return "收到错误报文";
+    default:
+      sprintf_s(unknown, "未知原因(代码：0x%04x)", reason);
+      return unknown;
+  }
+}
+
+static CMyCTPMarketQHandler* CTPMarketQHandlerArray[MAX_COMPANIES_OF_FUTURES] = {
     nullptr};
 static bool CTPMarketQRunning = false;
 
@@ -58,6 +104,8 @@ CMyCTPMarketQHandler::CMyCTPMarketQHandler(std::string company,
       _password(password),
       _requestID(0),
       _mdApi(nullptr) {
+  MyCreateDirectory(_flowPath);
+
   _mdApi = CThostFtdcMdApi::CreateFtdcMdApi(_flowPath.c_str(), _usingUDP,
                                             _isMulticast);
   _mdApi->RegisterSpi(this);
@@ -66,14 +114,14 @@ CMyCTPMarketQHandler::CMyCTPMarketQHandler(std::string company,
   for (size_t i = 0; i < MAX_FRONT_NUM; i++) {
     _front[i] = front[i];
     if (!_front[i].empty()) {
-      std::string front_address(_usingUDP ? "tcp://" : "udp://");
+      std::string front_address(_usingUDP ? "udp://" : "tcp://");
       front_address += _front[i];
       _mdApi->RegisterFront((char*)front_address.c_str());
       registered_front_num++;
     }
   }
   _mdApi->Init();
-}
+};
 
 CMyCTPMarketQHandler::~CMyCTPMarketQHandler() {
   if (_mdApi != nullptr) {
@@ -90,7 +138,7 @@ CMyCTPMarketQHandler::~CMyCTPMarketQHandler() {
 
 CMyCTPMarketQHandler* CMyCTPMarketQHandler::Handler(uint8_t handlerIndex) {
   CMyCTPMarketQHandler* ret = nullptr;
-  if (handlerIndex < MAX_MARKETQ_HANDLER) {
+  if (handlerIndex < MAX_COMPANIES_OF_FUTURES) {
     ret = CTPMarketQHandlerArray[handlerIndex];
   }
   return ret;
@@ -108,10 +156,11 @@ uint8_t CMyCTPMarketQHandler::Start(const char* confile) {
 
     Json::parseFromStream(crbuider, ifs, &root, &errs);
 
-    //std::cout << root << std::endl;
+    // std::cout << root << std::endl;
 
     Json::Value conf = root["conf"];
-    for (int i = 0; i < std::min<int>(conf.size(), MAX_MARKETQ_HANDLER); i++) {
+    for (int i = 0; i < std::min<int>(conf.size(), MAX_COMPANIES_OF_FUTURES);
+         i++) {
       std::string company = conf[i]["company"].asString();
       std::string brokerID = conf[i]["brokerID"].asString();
       std::string flowPath = conf[i]["flowPath"].asString();
@@ -151,7 +200,7 @@ uint8_t CMyCTPMarketQHandler::Start(const char* confile) {
 bool CMyCTPMarketQHandler::IsRunning() { return CTPMarketQRunning; }
 
 void CMyCTPMarketQHandler::Stop() {
-  for (size_t i = 0; i < MAX_MARKETQ_HANDLER; i++) {
+  for (size_t i = 0; i < MAX_COMPANIES_OF_FUTURES; i++) {
     if (CTPMarketQHandlerArray[i] != nullptr) {
       delete CTPMarketQHandlerArray[i];
       CTPMarketQHandlerArray[i] = nullptr;
@@ -169,7 +218,7 @@ bool CMyCTPMarketQHandler::SQR(const char* instrumentID, bool on) {
 
   if (instrumentID == nullptr || strlen(instrumentID) <= 0 ||
       instrumentID[0] == '*') {
-    for (size_t i = 0; i < MAX_MARKETQ_HANDLER; i++) {
+    for (size_t i = 0; i < MAX_COMPANIES_OF_FUTURES; i++) {
       if (CTPMarketQHandlerArray[i] != nullptr) {
         for (size_t j = 0; j < smd_instrumentIDs.size(); j++) {
           CTPMarketQHandlerArray[i]->sqr(smd_instrumentIDs[j].c_str(), false);
@@ -198,7 +247,7 @@ bool CMyCTPMarketQHandler::SQR(const char* instrumentID, bool on) {
     sqr_instrumentIDs.erase(found_instrumentID);
   }
 
-  for (size_t i = 0; i < MAX_MARKETQ_HANDLER; i++) {
+  for (size_t i = 0; i < MAX_COMPANIES_OF_FUTURES; i++) {
     if (CTPMarketQHandlerArray[i] != nullptr) {
       CTPMarketQHandlerArray[i]->sqr(instrumentID, on);
     }
@@ -217,7 +266,7 @@ bool CMyCTPMarketQHandler::SMD(const char* instrumentID, bool on) {
 
   if (instrumentID == nullptr || strlen(instrumentID) <= 0 ||
       instrumentID[0] == '*') {
-    for (size_t i = 0; i < MAX_MARKETQ_HANDLER; i++) {
+    for (size_t i = 0; i < MAX_COMPANIES_OF_FUTURES; i++) {
       if (CTPMarketQHandlerArray[i] != nullptr) {
         for (size_t j = 0; j < smd_instrumentIDs.size(); j++) {
           CTPMarketQHandlerArray[i]->smd(smd_instrumentIDs[j].c_str(), false);
@@ -246,7 +295,7 @@ bool CMyCTPMarketQHandler::SMD(const char* instrumentID, bool on) {
     smd_instrumentIDs.erase(found_instrumentID);
   }
 
-  for (size_t i = 0; i < MAX_MARKETQ_HANDLER; i++) {
+  for (size_t i = 0; i < MAX_COMPANIES_OF_FUTURES; i++) {
     if (CTPMarketQHandlerArray[i] != nullptr) {
       CTPMarketQHandlerArray[i]->smd(instrumentID, on);
     }
@@ -308,8 +357,7 @@ bool CMyCTPMarketQHandler::smd(const char* instrumentID, bool on) {
 }
 
 void CMyCTPMarketQHandler::OnFrontConnected() {
-  std::cout << "（" << _company << "）"
-            << "已连接。" << std::endl;
+  std::cout << std::endl << "（" << _company << "）前置已连接。" << std::endl;
 
   CThostFtdcReqUserLoginField userLoginField;
   memset(&userLoginField, 0x00, sizeof(CThostFtdcReqUserLoginField));
@@ -317,14 +365,17 @@ void CMyCTPMarketQHandler::OnFrontConnected() {
   strcpy_s(userLoginField.BrokerID, _brokerID.c_str());
   strcpy_s(userLoginField.UserID, _userID.c_str());
   strcpy_s(userLoginField.Password, _password.c_str());
-  strcpy_s(userLoginField.UserProductInfo, "Fisher.CTPMarketQ");
+  strcpy_s(userLoginField.UserProductInfo, "CTPMarketQ");
 
   int ret = _mdApi->ReqUserLogin(&userLoginField, _requestID++);
+  std::cout << "（" << _company << "）尝试登入：" << errString(ret)
+            << std::endl;
 }
 
 void CMyCTPMarketQHandler::OnFrontDisconnected(int nReason) {
-  std::cout << "（" << _company << "）"
-            << "连接断开。（错误代码：0x" << std::hex << nReason << "）"
+  std::cout << std::endl
+            << "（" << _company << "）"
+            << "前置已断开。（原因：" << reasonString(nReason) << "）"
             << std::endl;
 }
 
@@ -336,22 +387,25 @@ void CMyCTPMarketQHandler::OnHeartBeatWarning(int nTimeLapse) {
 void CMyCTPMarketQHandler::OnRspUserLogin(
     CThostFtdcRspUserLoginField* pRspUserLogin,
     CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast) {
-  std::cout << "（" << _company << "）"
-            << "登录响应：" << pRspInfo->ErrorMsg << "（RequstID："
+  std::cout << std::endl
+            << "（" << _company << "）"
+            << "登入响应：" << pRspInfo->ErrorMsg << "（RequstID："
             << nRequestID << (bIsLast ? "，最后一次）" : "）") << std::endl;
 }
 
 void CMyCTPMarketQHandler::OnRspUserLogout(
     CThostFtdcUserLogoutField* pUserLogout, CThostFtdcRspInfoField* pRspInfo,
     int nRequestID, bool bIsLast) {
-  std::cout << "（" << _company << "）"
+  std::cout << std::endl
+            << "（" << _company << "）"
             << "登出响应：" << pRspInfo->ErrorMsg << "（RequstID："
             << nRequestID << (bIsLast ? "，最后一次）" : "）") << std::endl;
 }
 
 void CMyCTPMarketQHandler::OnRspError(CThostFtdcRspInfoField* pRspInfo,
                                       int nRequestID, bool bIsLast) {
-  std::cout << "（" << _company << "）"
+  std::cout << std::endl
+            << "（" << _company << "）"
             << "错误响应：" << pRspInfo->ErrorMsg << "（RequstID："
             << nRequestID << (bIsLast ? "，最后一次）" : "）") << std::endl;
 }
@@ -359,16 +413,18 @@ void CMyCTPMarketQHandler::OnRspError(CThostFtdcRspInfoField* pRspInfo,
 void CMyCTPMarketQHandler::OnRspSubMarketData(
     CThostFtdcSpecificInstrumentField* pSpecificInstrument,
     CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast) {
-  std::cout << "（" << _company << "）"
+  std::cout << std::endl
+            << "（" << _company << "）"
             << "订阅（" << pSpecificInstrument->InstrumentID << "）行情："
             << pRspInfo->ErrorMsg << "（RequstID：" << nRequestID
             << (bIsLast ? "，最后一次）" : "）") << std::endl;
-};
+}
 
 void CMyCTPMarketQHandler::OnRspUnSubMarketData(
     CThostFtdcSpecificInstrumentField* pSpecificInstrument,
     CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast) {
-  std::cout << "（" << _company << "）"
+  std::cout << std::endl
+            << "（" << _company << "）"
             << "取消（" << pSpecificInstrument->InstrumentID << "）行情："
             << pRspInfo->ErrorMsg << "（RequstID：" << nRequestID
             << (bIsLast ? "，最后一次）" : "）") << std::endl;
@@ -377,7 +433,8 @@ void CMyCTPMarketQHandler::OnRspUnSubMarketData(
 void CMyCTPMarketQHandler::OnRspSubForQuoteRsp(
     CThostFtdcSpecificInstrumentField* pSpecificInstrument,
     CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast) {
-  std::cout << "（" << _company << "）"
+  std::cout << std::endl
+            << "（" << _company << "）"
             << "订阅（" << pSpecificInstrument->InstrumentID << "）询价："
             << pRspInfo->ErrorMsg << "（RequstID：" << nRequestID
             << (bIsLast ? "，最后一次）" : "）") << std::endl;
@@ -386,14 +443,21 @@ void CMyCTPMarketQHandler::OnRspSubForQuoteRsp(
 void CMyCTPMarketQHandler::OnRspUnSubForQuoteRsp(
     CThostFtdcSpecificInstrumentField* pSpecificInstrument,
     CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast) {
-  std::cout << "（" << _company << "）"
+  std::cout << std::endl
+            << "（" << _company << "）"
             << "取消（" << pSpecificInstrument->InstrumentID << "）询价："
             << pRspInfo->ErrorMsg << "（RequstID：" << nRequestID
             << (bIsLast ? "，最后一次）" : "）") << std::endl;
 }
 
 void CMyCTPMarketQHandler::OnRtnDepthMarketData(
-    CThostFtdcDepthMarketDataField* pDepthMarketData) {}
+    CThostFtdcDepthMarketDataField* pDepthMarketData) {
+  std::cout << std::endl
+            << "MarketData：" << pDepthMarketData->InstrumentID << std::endl;
+};
 
 void CMyCTPMarketQHandler::OnRtnForQuoteRsp(
-    CThostFtdcForQuoteRspField* pForQuoteRsp) {}
+    CThostFtdcForQuoteRspField* pForQuoteRsp) {
+  std::cout << std::endl
+            << "Quote：" << pForQuoteRsp->InstrumentID << std::endl;
+}

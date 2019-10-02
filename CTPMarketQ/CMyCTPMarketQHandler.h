@@ -1,8 +1,12 @@
 #pragma once
 
-#define MAX_MARKETQ_HANDLER 3
+#ifdef _DEBUG
+#define MAX_COMPANIES_OF_FUTURES 4 // 最后一个配置是7*24的行情测试服务器
+#else
+#define MAX_COMPANIES_OF_FUTURES 3
+#endif  // _DEBUG
 
-#define MAX_FRONT_NUM 4
+#define MAX_FRONT_NUM	8
 
 class CMyCTPMarketQHandler : public CThostFtdcMdSpi {
  public:
