@@ -1,5 +1,5 @@
-libdir=C:/Program Files/JSONCPP/lib
-includedir=C:/Program Files/JSONCPP/include
+libdir=C:/Program Files (x86)/JSONCPP/lib
+includedir=C:/Program Files (x86)/JSONCPP/include
 
 Name: jsoncpp
 Description: A C++ library for interacting with JSON
