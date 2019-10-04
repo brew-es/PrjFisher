@@ -9,7 +9,6 @@
 extern void SetConsoleCtrlHandler();
 
 int main() {
-
   atexit([]() {
     std::cout << "Fisher控制台已结束。" << std::endl;
     std::cout << "]" << std::endl;
@@ -24,7 +23,7 @@ int main() {
   CFisherCommand::Instance();
   std::cout << std::endl;
 
-  #ifdef _DEBUG
+#ifdef _DEBUG
   std::cout << "DEBUG [" << std::endl << std::endl;
   CFisherCommand::Instance()->Execute("load", "ctpmarketq.dll");
   std::cout << std::endl;
@@ -32,7 +31,6 @@ int main() {
   std::cout << std::endl;
   std::cout << "]" << std::endl;
 #endif  // _DEBUG
-
 
   while (true) {
     char cmdLine[512] = "";
@@ -54,7 +52,7 @@ int main() {
     }
 
     std::cout << yellow << std::endl << "[" << std::endl;
-    CFisherCommand::Instance()->Execute(cmdLine, optString);
+    CFisherCommand::Instance()->Execute(cmdString, optString);
     std::cout << "]" << std::endl;
     std::cout << std::endl;
   };
