@@ -1,15 +1,19 @@
 #pragma once
 
-#define MAX_MARKETQ_HANDLER 3
+#ifdef _DEBUG
+#define MAX_COMPANIES_OF_FUTURES 4 // 最后一个配置是7*24的行情测试服务器
+#else
+#define MAX_COMPANIES_OF_FUTURES 3
+#endif  // _DEBUG
 
-#define MAX_FRONT_NUM 4
+#define MAX_FRONT_NUM	8
 
 class CMyCTPMarketQHandler : public CThostFtdcMdSpi {
  public:
   CMyCTPMarketQHandler(std::string company, std::string brokerID,
                        std::string flowPath, bool usingUDP, bool isMulticast,
                        std::string userID, std::string password,
-                       std::string front[MAX_FRONT_NUM]);
+                       std::string front[MAX_FRONT_NUM], uint16_t pubPort);
   virtual ~CMyCTPMarketQHandler();
 
  public:
@@ -21,6 +25,7 @@ class CMyCTPMarketQHandler : public CThostFtdcMdSpi {
   static bool SQR(const char *instrumentID, bool on);
   static bool SMD(const char *instrumentID, bool on);
   static void List(const char *instrumentID);
+  static bool Show(const char *instrumentID, bool on);
 
  public:
   bool sqr(const char *instrumentID, bool on);
@@ -61,6 +66,9 @@ class CMyCTPMarketQHandler : public CThostFtdcMdSpi {
   virtual void OnRtnForQuoteRsp(CThostFtdcForQuoteRspField *pForQuoteRsp);
 
  private:
+  static void marketqProc();
+
+ private:
   std::string _company;
   std::string _brokerID;
   std::string _flowPath;
@@ -73,4 +81,6 @@ class CMyCTPMarketQHandler : public CThostFtdcMdSpi {
 
   int _requestID;
   CThostFtdcMdApi *_mdApi;
+
+  void *_pubSocket;
 };

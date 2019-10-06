@@ -1,4 +1,5 @@
 {
+  "port": 3056,
   "conf": [
     {
       "company": "Eastmoney Futures",
@@ -43,6 +44,18 @@
         "180.153.15.150:42213",
         "180.153.15.146:42213",
         "101.231.128.133:42213"
+      ]
+    },
+    {
+      "company": "7*24 Test",
+      "brokerID": "8000",
+      "flowPath": "./flow4/",
+      "usingUDP": false,
+      "isMulticast": false,
+      "userID": "000005",
+      "password": "123456",
+      "front": [
+        "180.168.146.187:10131"
       ]
     }
   ]
