@@ -16,5 +16,7 @@
 #pragma comment(lib, "../JSONCPP/lib/jsoncpp.lib")
 #endif // _DEBUG
 
+#include "../ZMQHelper/ZMQHelper.cpp"
+
 #pragma comment(lib, "../CTP/lib/thostmduserapi_se.lib")
 #pragma comment(lib, "../CTP/lib/thosttraderapi_se.lib")

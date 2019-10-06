@@ -1,11 +1,20 @@
 #include "pch.h"
-#include <iostream>
 #include <fstream>
+#include <iostream>
+
+#include <future>
+
+#include <direct.h>
+#include <io.h>
 
 #include "CMyCTPMarketQHandler.h"
 
-#include <io.h>
-#include <direct.h>
+#include "MarketQDef.h"
+
+static void* zmqContext = nullptr;
+static void* pubSocket = nullptr; // 将接收的期货行情数据进行统一发布
+static void* subSocket = nullptr; // 接收各期货公司的行情数据
+static std::future<void> recvFut;
 
 static bool MyCreateDirectory(std::string folder) {
   std::string sub;
@@ -83,18 +92,16 @@ static const char* reasonString(int reason) {
   }
 }
 
-static CMyCTPMarketQHandler* CTPMarketQHandlerArray[MAX_COMPANIES_OF_FUTURES] = {
-    nullptr};
+static CMyCTPMarketQHandler* CTPMarketQHandlerArray[MAX_COMPANIES_OF_FUTURES] =
+    {nullptr};
 static bool CTPMarketQRunning = false;
 
 static std::vector<std::string> sqr_instrumentIDs, smd_instrumentIDs;
 
-CMyCTPMarketQHandler::CMyCTPMarketQHandler(std::string company,
-                                           std::string brokerID,
-                                           std::string flowPath, bool usingUDP,
-                                           bool isMulticast, std::string userID,
-                                           std::string password,
-                                           std::string front[MAX_FRONT_NUM])
+CMyCTPMarketQHandler::CMyCTPMarketQHandler(
+    std::string company, std::string brokerID, std::string flowPath,
+    bool usingUDP, bool isMulticast, std::string userID, std::string password,
+    std::string front[MAX_FRONT_NUM], uint16_t pubPort)
     : _company(company),
       _brokerID(brokerID),
       _flowPath(flowPath),
@@ -103,7 +110,8 @@ CMyCTPMarketQHandler::CMyCTPMarketQHandler(std::string company,
       _userID(userID),
       _password(password),
       _requestID(0),
-      _mdApi(nullptr) {
+      _mdApi(nullptr),
+      _pubSocket(nullptr) {
   MyCreateDirectory(_flowPath);
 
   _mdApi = CThostFtdcMdApi::CreateFtdcMdApi(_flowPath.c_str(), _usingUDP,
@@ -121,7 +129,9 @@ CMyCTPMarketQHandler::CMyCTPMarketQHandler(std::string company,
     }
   }
   _mdApi->Init();
-};
+
+  _pubSocket = ZMQ_InitPubSocket(zmqContext, pubPort);
+}
 
 CMyCTPMarketQHandler::~CMyCTPMarketQHandler() {
   if (_mdApi != nullptr) {
@@ -134,6 +144,8 @@ CMyCTPMarketQHandler::~CMyCTPMarketQHandler() {
     int ret = _mdApi->ReqUserLogout(&userLogoutField, ++_requestID);
     _mdApi->Release();
   }
+
+  ZMQ_CloseSocket(_pubSocket);
 }
 
 CMyCTPMarketQHandler* CMyCTPMarketQHandler::Handler(uint8_t handlerIndex) {
@@ -158,6 +170,18 @@ uint8_t CMyCTPMarketQHandler::Start(const char* confile) {
 
     // std::cout << root << std::endl;
 
+    // port用于统一发布行情数据
+    // port + i + 1用于订阅各期货公司的行情数据
+    uint16_t port = root["port"].asInt();
+    if (port <= 0) {
+      port = 3056;
+    }
+
+    zmqContext = ZMQ_NewContext();
+    pubSocket = ZMQ_InitPubSocket(zmqContext, port);
+    subSocket = ZMQ_InitSubSocket(zmqContext);
+    ZMQ_SubSocketFilter(subSocket, "", 0, true);
+
     Json::Value conf = root["conf"];
     for (int i = 0; i < std::min<int>(conf.size(), MAX_COMPANIES_OF_FUTURES);
          i++) {
@@ -179,9 +203,11 @@ uint8_t CMyCTPMarketQHandler::Start(const char* confile) {
       }
 
       try {
-        CTPMarketQHandlerArray[i] =
-            new CMyCTPMarketQHandler(company, brokerID, flowPath, usingUDP,
-                                     isMulticast, userID, password, address);
+        const uint16_t company_port = port + i + 1;
+        CTPMarketQHandlerArray[i] = new CMyCTPMarketQHandler(
+            company, brokerID, flowPath, usingUDP, isMulticast, userID,
+            password, address, company_port);
+        ZMQ_SubSocketConn(subSocket, company_port);
         std::cout << "（" << i << "，" << company << "）成功。" << std::endl;
       } catch (std::exception& e) {
         std::cout << "（" << i << "，" << company << "）失败：" << e.what()
@@ -192,6 +218,10 @@ uint8_t CMyCTPMarketQHandler::Start(const char* confile) {
     }
 
     CTPMarketQRunning = ret > 0;
+    if (CTPMarketQRunning) {
+      recvFut =
+          std::async(std::launch::async, CMyCTPMarketQHandler::marketqProc);
+    }
   }
 
   return ret;
@@ -206,7 +236,20 @@ void CMyCTPMarketQHandler::Stop() {
       CTPMarketQHandlerArray[i] = nullptr;
     }
   }
+
   CTPMarketQRunning = false;
+
+  ZMQ_SubSocketFilter(subSocket, "", 0, false);
+  ZMQ_CloseSocket(subSocket);
+  subSocket = nullptr;
+  ZMQ_CloseSocket(pubSocket);
+  pubSocket = nullptr;
+
+  ZMQ_DestroyContext(zmqContext);
+
+  if (recvFut.valid()) {
+    recvFut.get();
+  }
 }
 
 bool CMyCTPMarketQHandler::SQR(const char* instrumentID, bool on) {
@@ -336,6 +379,28 @@ void CMyCTPMarketQHandler::List(const char* instrumentID) {
   std::cout << std::endl;
 }
 
+bool CMyCTPMarketQHandler::Show(const char* instrumentID, bool on) {
+  if (on && (instrumentID == nullptr || strlen(instrumentID) <= 0 ||
+             instrumentID[0] == '*')) {
+    std::cout << "参数错误！" << std::endl;
+    return false;
+  }
+
+  if (instrumentID == nullptr || strlen(instrumentID) <= 0 ||
+      instrumentID[0] == '*') {
+    std::cout << "已全部取消显示。" << std::endl;
+    return true;
+  }
+
+  // 还没实际实现
+  // 后面接入python模块，用于图形化展示
+  // 展示模块通过订阅获得行情数据
+
+  std::cout << (on ? "开始显示（" : "停止显示（") << instrumentID << "）"
+            << std::endl;
+  return true;
+}
+
 bool CMyCTPMarketQHandler::sqr(const char* instrumentID, bool on) {
   char* instrumentIDs[] = {(char*)instrumentID};
   if (on) {
@@ -450,14 +515,143 @@ void CMyCTPMarketQHandler::OnRspUnSubForQuoteRsp(
             << (bIsLast ? "，最后一次）" : "）") << std::endl;
 }
 
+static char* MakeMarketMsg(CThostFtdcDepthMarketDataField* field, size_t* len) {
+  static char marketMsg[1024] = "";
+
+  Json::Value root;
+
+  root["msgType"] = MSG_TYPE_MARKET;
+  root["param"]["TradingDay"] = field->TradingDay;
+  root["param"]["InstrumentID"] = field->InstrumentID;
+  root["param"]["ExchangeID"] = field->ExchangeID;
+  root["param"]["ExchangeInstID"] = field->ExchangeInstID;
+  root["param"]["LastPrice"] = field->LastPrice;
+  root["param"]["PreSettlementPrice"] = field->PreSettlementPrice;
+  root["param"]["PreClosePrice"] = field->PreClosePrice;
+  root["param"]["PreOpenInterest"] = field->PreOpenInterest;
+  root["param"]["OpenPrice"] = field->OpenPrice;
+  root["param"]["HighestPrice"] = field->HighestPrice;
+  root["param"]["LowestPrice"] = field->LowestPrice;
+  root["param"]["Volume"] = field->Volume;
+  root["param"]["Turnover"] = field->Turnover;
+  root["param"]["OpenInterest"] = field->OpenInterest;
+  root["param"]["ClosePrice"] = field->ClosePrice;
+  root["param"]["SettlementPrice"] = field->SettlementPrice;
+  root["param"]["UpperLimitPrice"] = field->UpperLimitPrice;
+  root["param"]["LowerLimitPrice"] = field->LowerLimitPrice;
+  root["param"]["PreDelta"] = field->PreDelta;
+  root["param"]["CurrDelta"] = field->CurrDelta;
+  root["param"]["UpdateTime"] = field->UpdateTime;
+  root["param"]["UpdateMillisec"] = field->UpdateMillisec;
+  root["param"]["BidPrice1"] = field->BidPrice1;
+  root["param"]["BidVolume1"] = field->BidVolume1;
+  root["param"]["AskPrice1"] = field->AskPrice1;
+  root["param"]["AskVolume1"] = field->AskVolume1;
+  root["param"]["BidPrice2"] = field->BidPrice2;
+  root["param"]["BidVolume2"] = field->BidVolume2;
+  root["param"]["AskPrice2"] = field->AskPrice2;
+  root["param"]["AskVolume2"] = field->AskVolume2;
+  root["param"]["BidPrice3"] = field->BidPrice3;
+  root["param"]["BidVolume3"] = field->BidVolume3;
+  root["param"]["AskPrice3"] = field->AskPrice3;
+  root["param"]["AskVolume3"] = field->AskVolume3;
+  root["param"]["BidPrice4"] = field->BidPrice4;
+  root["param"]["BidVolume4"] = field->BidVolume4;
+  root["param"]["AskPrice4"] = field->AskPrice4;
+  root["param"]["AskVolume4"] = field->AskVolume4;
+  root["param"]["BidPrice5"] = field->BidPrice5;
+  root["param"]["BidVolume5"] = field->BidVolume5;
+  root["param"]["AskPrice5"] = field->AskPrice5;
+  root["param"]["AskVolume5"] = field->AskVolume5;
+  root["param"]["AveragePrice"] = field->AveragePrice;
+  root["param"]["ActionDay"] = field->ActionDay;
+
+  size_t bytes_of_msg = root.toStyledString().length();
+  strcpy_s(marketMsg, root.toStyledString().c_str());
+  if (len != nullptr) {
+    *len = bytes_of_msg;
+  }
+
+  return marketMsg;
+}
+
 void CMyCTPMarketQHandler::OnRtnDepthMarketData(
     CThostFtdcDepthMarketDataField* pDepthMarketData) {
+#ifdef _DEBUG
   std::cout << std::endl
             << "MarketData：" << pDepthMarketData->InstrumentID << std::endl;
-};
+#endif  // _DEBUG
+
+  size_t len = 0;
+  char* msg = MakeMarketMsg(pDepthMarketData, &len);
+  ZMQ_PubSocketSend(_pubSocket, msg, len);
+}
+
+static char* MakeQuoteMsg(CThostFtdcForQuoteRspField* field, size_t* len) {
+  static char quoteMsg[1024] = "";
+
+  Json::Value root;
+
+  root["msgType"] = MSG_TYPE_QUOTE;
+  root["param"]["TradingDay"] = field->TradingDay;
+  root["param"]["InstrumentID"] = field->InstrumentID;
+  root["param"]["ForQuoteSysID"] = field->ForQuoteSysID;
+  root["param"]["ForQuoteTime"] = field->ForQuoteTime;
+  root["param"]["ActionDay"] = field->ActionDay;
+  root["param"]["ExchangeID"] = field->ExchangeID;
+
+  size_t bytes_of_msg = root.toStyledString().length();
+  strcpy_s(quoteMsg, root.toStyledString().c_str());
+  if (len != nullptr) {
+    *len = bytes_of_msg;
+  }
+
+  return quoteMsg;
+}
 
 void CMyCTPMarketQHandler::OnRtnForQuoteRsp(
     CThostFtdcForQuoteRspField* pForQuoteRsp) {
+#ifdef _DEBUG
   std::cout << std::endl
             << "Quote：" << pForQuoteRsp->InstrumentID << std::endl;
+#endif  // _DEBUG
+
+  size_t len = 0;
+  char* msg = MakeQuoteMsg(pForQuoteRsp, &len);
+  ZMQ_PubSocketSend(_pubSocket, msg, len);
+}
+
+void CMyCTPMarketQHandler::marketqProc() {
+  char szMsg[1024] = "";
+
+  std::cout << "marketqPrc：开始运行。" << std::endl;
+
+  while (CTPMarketQRunning) {
+    int ret_of_ssr = ZMQ_SubSocketRecv(subSocket, szMsg, 1024);
+    if (ret_of_ssr > 0) {
+      Json::Value root;
+      Json::CharReaderBuilder crbuider;
+      std::stringstream ss(szMsg);
+      std::string errs;
+      Json::parseFromStream(crbuider, ss, &root, &errs);
+
+      Json::Value msgType = root["msgType"];
+      int msgTypeV = msgType.asInt();
+      switch (msgTypeV) {
+        case MSG_TYPE_MARKET:
+          ZMQ_PubSocketSend(pubSocket, szMsg, ret_of_ssr);
+          break;
+        case MSG_TYPE_QUOTE:
+          ZMQ_PubSocketSend(pubSocket, szMsg, ret_of_ssr);
+          break;
+        default:
+          break;
+      }
+    } else if (errno != EAGAIN) {
+      std::cout << "marketqPrc：0x" << std::hex << errno << std::endl;
+      break;
+    }
+  }
+
+  std::cout << "marketqPrc：结束运行。" << std::endl;
 }

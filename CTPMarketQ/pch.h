@@ -15,6 +15,7 @@
 #include "../CTP/ThostFtdcMdApi.h"
 
 #include "../JSONCPP/include/json/json.h"
+#include "../ZMQHelper/ZMQHelper.h"
 
 #include "../FisherConsole/CFisherCommand.h"
 
