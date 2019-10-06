@@ -54,6 +54,12 @@ int ZMQ_SubSocketRecv(void* s, char* msg, size_t len) {
 	return ret;
 };
 
+int ZMQ_SubSocketRecvAsync(void* s, char* msg, size_t len) {
+  int ret = 0;
+  ret = zmq_recv(s, msg, len, ZMQ_DONTWAIT);
+  return ret;
+};
+
 void ZMQ_CloseSocket(void* s) {
 	zmq_close(s);
 }
